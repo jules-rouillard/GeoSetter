@@ -3,12 +3,12 @@ from PIL import Image, ExifTags
 
 # img_contents = os.listdir()
 
-img_folder = r"C:\Users\Jules\Documents\GeoSetter\img"
+img_folder = rb"C:\Users\Jules\Documents\GeoSetter\img"
 img_contents = os.listdir(img_folder)
 
-
 class image_metadata:
-    def __init__(self,path):
+    def __init__(self,name,path):
+        self.name = name
         self.path = path
         self.gps_info = ""
         self.DateTimeOriginal = ""
@@ -26,11 +26,13 @@ class image_metadata:
 
 def metadata_extraction(l_obj):
     for image in img_contents:
+        print(image)
         full_path = os.path.join(img_folder, image)
+        l_obj.append(image_metadata(image,full_path))
+
         img = Image.open(full_path)
         exif = {ExifTags.TAGS[k]: v for k, v in img._getexif().items() if k in ExifTags.TAGS}
 
-        l_obj.append(image_metadata(full_path))
         obj = l_obj[-1]
         obj.DateTimeOriginal = exif['DateTimeOriginal']
         obj.DateTimeOriginal_formating()
@@ -40,8 +42,28 @@ def metadata_extraction(l_obj):
             obj.gps_info = []
             print("This image has no GPS info in it")
             print(full_path)
+        img.close()
+
+
+
+def find_closer_time():
+
+
+    return True
+
+# def write_geo_metadata(obj,obj2):
+#     img = Image.open(obj.path)
+    
+#     exif_data = img.getexif()
+#     exif_data['GPSInfo'] = obj2.gps_info
+
+#     img.save("modified_example.jpg", exif=exif_data)
+#     img.close()
+#     return True
 
 
 l_obj_image_metadata = []
 
 metadata_extraction(l_obj_image_metadata)
+
+# write_geo_metadata(l_obj_image_metadata[0],l_obj_image_metadata[1])
