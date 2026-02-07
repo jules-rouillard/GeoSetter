@@ -132,7 +132,7 @@ def write_geo_metadata(obj):
     exif_bytes = piexif.dump(exif_dict)
 
     # Save image with new metadata
-    img.save(obj.name.decode('UTF-8')+".jpg", exif=exif_bytes)
+    img.save("gps_"+obj.name, exif=exif_bytes)
     img.close()
 
     return True
@@ -152,10 +152,13 @@ def write_geo_metadata(obj):
 
 # print("Finding close picture and taking gps data")
 # find_closer_time(l_obj_w_gps,l_obj_no_gps)
-
+# cwd = os.getcwd()
+# os.chdir(output_folder)
 # for obj in l_obj_no_gps:
 #     if obj.gps_info != []:
-#         write_geo_metadata(obj)
+#         write_geo_metadata(obj,output_folder)
+# os.chdir(cwd)
+
 
 
 #################################### GUI ####################################
@@ -175,16 +178,47 @@ def tick_checkbtn(btn):
                 l2[i].deselect()
     
 def main_run():
-    for i in range(len(l2)):
-        print(l2[i].get())
+    str_stat.set("Processing")
+    img_folder = str_input_dir.get()
+    output_folder = str_output_dir.get()
+
+    l_obj_image_metadata = []
+    print("Metadata extraction")
+    metadata_extraction(l_obj_image_metadata,img_folder)
+
+    print("Split list in two")
+    l_obj_w_gps,l_obj_no_gps = split_obj_on_gps_info(l_obj_image_metadata)
+
+    print("Finding close picture and taking gps data")
+    find_closer_time(l_obj_w_gps,l_obj_no_gps)
+
+    
+    cwd = os.getcwd()
+    os.chdir(output_folder)
+    nb_img_changed = 0
+    for obj in l_obj_no_gps:
+        if obj.gps_info != []:
+            write_geo_metadata(obj)
+            nb_img_changed+=1
+
+    os.chdir(cwd)
+
+    str_run_info.set("TI="+str(len(l_obj_image_metadata))+";IG="+str(len(l_obj_w_gps))+";ING="+str(len(l_obj_no_gps))+";ICG=" +str(nb_img_changed))
+    str_stat.set("DONE")
+    image_label.configure(image=my_image2)
+    image_label.configure(text="It worked!! Free doggo to celebrate")
+    text=""
+
+
+
 
 
 tk.set_appearance_mode("System")  # Modes: system (default), light, dark
 tk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
 
 app = tk.CTk()  # create CTk window like you do with the Tk window
-app.geometry("600x600")
-app.title("GeoSetter beta")
+app.geometry("600x700")
+app.title("GeoSetter")
 
 
 str_input_dir = tk.StringVar()
@@ -221,8 +255,34 @@ btn_run.place(x = 400, y = 150)
 l2 = [btn_1h,btn_2h,btn_3h]
 
 
+# RUN INFO
+str_stat = tk.StringVar()
+str_stat.set("")
+t_status = tk.CTkLabel(app, textvariable=str_stat)
+t_status.place(x = 400, y = 175)
+
+str_run_info = tk.StringVar()
+t_run_info = tk.CTkLabel(app, textvariable=str_run_info)
+t_run_info.place(x = 400, y = 200)
+
+
 t1_file3 = tk.StringVar()
 t1_textbox3 = tk.CTkEntry(app, textvariable=t1_file3).place(x = 10, y = 150)
+
+
+
+my_image = tk.CTkImage(light_image=Image.open('20251215_150905.JPG'),
+                        dark_image=Image.open("20251215_150905.JPG"),
+                        size=(523,402))
+
+my_image2 = tk.CTkImage(light_image=Image.open('20251229_155554.JPG'),
+                        dark_image=Image.open("20251229_155554.JPG"),
+                        size=(523,402))
+
+
+# image_label = tk.CTkLabel(app, image=my_image, text="")  # display image with a CTkLabel
+image_label = tk.CTkLabel(app, text="", text_color="white")  # display image with a CTkLabel
+image_label.place(x = 50, y = 225)
 
 app.mainloop()
 
