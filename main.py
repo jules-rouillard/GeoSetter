@@ -2,7 +2,9 @@ import os
 import sys
 from PIL import Image, ExifTags
 import piexif
-import customtkinter
+# For GUI
+import customtkinter as tk
+from customtkinter import filedialog as fd
 
 class image_metadata:
     '''
@@ -32,7 +34,7 @@ class image_metadata:
 
 
 
-def metadata_extraction(l_obj,img_folder,img_contents):
+def metadata_extraction(l_obj,img_folder):
     '''
     Extract metadata from images in a folder and populate a list of image_metadata objects.
     1. Loop through each image in the specified folder. 
@@ -46,6 +48,7 @@ def metadata_extraction(l_obj,img_folder,img_contents):
     Returns:
         None
     '''
+    img_contents = os.listdir(img_folder)
     for image in img_contents:
         full_path = os.path.join(img_folder, image)
         l_obj.append(image_metadata(image,full_path))
@@ -136,34 +139,90 @@ def write_geo_metadata(obj):
 
 
 # Testing tool
-img_folder = rb"C:\Users\Jules\Documents\GeoSetter\img"
-output_folder = rb"C:\Users\Jules\Documents\GeoSetter\img2"
-img_contents = os.listdir(img_folder)
-l_obj_image_metadata = []
+# img_folder = rb"C:\Users\Jules\Documents\GeoSetter\img"
+# output_folder = rb"C:\Users\Jules\Documents\GeoSetter\img2"
 
-print("Metadata extraction")
-metadata_extraction(l_obj_image_metadata,img_folder,img_contents)
+# l_obj_image_metadata = []
 
-print("Split list in two")
-l_obj_w_gps,l_obj_no_gps = split_obj_on_gps_info(l_obj_image_metadata)
+# print("Metadata extraction")
+# metadata_extraction(l_obj_image_metadata,img_folder)
 
-print("Finding close picture and taking gps data")
-find_closer_time(l_obj_w_gps,l_obj_no_gps)
+# print("Split list in two")
+# l_obj_w_gps,l_obj_no_gps = split_obj_on_gps_info(l_obj_image_metadata)
 
-for obj in l_obj_no_gps:
-    if obj.gps_info != []:
-        write_geo_metadata(obj)
+# print("Finding close picture and taking gps data")
+# find_closer_time(l_obj_w_gps,l_obj_no_gps)
+
+# for obj in l_obj_no_gps:
+#     if obj.gps_info != []:
+#         write_geo_metadata(obj)
 
 
+#################################### GUI ####################################
 
-customtkinter.set_appearance_mode("System")  # Modes: system (default), light, dark
-customtkinter.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
+# UI FUNCTION
 
-app = customtkinter.CTk()  # create CTk window like you do with the Tk window
-app.geometry("400x240")
+# Selection of directory
+def select_dir(text_entry):
+    fname = fd.askdirectory(initialdir=os.path.dirname(os.path.abspath(__file__)))
+    text_entry.set(fname)
+
+# Automatic unticking of options
+def tick_checkbtn(btn):
+    for i in range(len(l2)):
+        if l2[i] != btn:
+            if l2[i].get():
+                l2[i].deselect()
+    
+def main_run():
+    for i in range(len(l2)):
+        print(l2[i].get())
+
+
+tk.set_appearance_mode("System")  # Modes: system (default), light, dark
+tk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
+
+app = tk.CTk()  # create CTk window like you do with the Tk window
+app.geometry("600x600")
 app.title("GeoSetter beta")
 
-# t1_File_1_text = app.Label(text="File 1 (.lckt/.cap)").grid(row=0, column=0)
 
+str_input_dir = tk.StringVar()
+textbox_input_dir = tk.CTkEntry(app, textvariable=str_input_dir).place(x = 10, y = 50)
+button = tk.CTkButton(app, text="Input dir", command=lambda: select_dir(str_input_dir))
+button.place(x = 150, y = 50)
+
+str_output_dir = tk.StringVar()
+textbox_output_dir = tk.CTkEntry(app, textvariable=str_output_dir).place(x = 10, y = 100)
+button2 = tk.CTkButton(app, text="output dir", command=lambda: select_dir(str_output_dir))
+button2.pack(padx = 25, pady = 25)
+button2.place(x = 150, y = 100)
+
+# RUN OPTIONS
+
+# Safe mode ie no overwriting original pictures
+btn_safe_mdoe = tk.CTkCheckBox(app, text="Safe mode")
+btn_safe_mdoe.place(x = 400, y = 50)
+btn_safe_mdoe.select()
+
+# Button to select search range
+btn_1h = tk.CTkCheckBox(app, text="1h", command=lambda: tick_checkbtn(btn_1h))
+btn_1h.place(x = 400, y = 75)
+
+btn_2h = tk.CTkCheckBox(app, text="2h", command=lambda: tick_checkbtn(btn_2h))
+btn_2h.place(x = 400, y = 100)
+
+btn_3h = tk.CTkCheckBox(app, text="3h", command=lambda: tick_checkbtn(btn_3h))
+btn_3h.place(x = 400, y = 125)
+
+btn_run = tk.CTkButton(app, text="RUN", command=lambda: main_run())
+btn_run.place(x = 400, y = 150)
+
+l2 = [btn_1h,btn_2h,btn_3h]
+
+
+t1_file3 = tk.StringVar()
+t1_textbox3 = tk.CTkEntry(app, textvariable=t1_file3).place(x = 10, y = 150)
 
 app.mainloop()
+
