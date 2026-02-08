@@ -20,8 +20,9 @@ class image_metadata:
 
         self.gps_info = []
         self.has_match = False
+        self.matched_obj = None
         self.cktimage = None
-
+        
         self.DateTimeOriginal = ""
         self.date = ""
         self.time_of_day_second = ""
@@ -53,43 +54,62 @@ def metadata_extraction(l_obj,img_folder):
     img_contents = os.listdir(img_folder)
     for image in img_contents:
         full_path = os.path.join(img_folder, image)
-        l_obj.append(image_metadata(image,full_path))
-        obj = l_obj[-1]
-        print(obj.path)
+        # Issue due to .mp4 files in the directory need to expand compatibility to other image format for now only .jpg
 
-        img = Image.open(full_path)
+        if (full_path[-4:-1]+full_path[-1]).lower() == ".jpg":
+            l_obj.append(image_metadata(image,full_path))
+            obj = l_obj[-1]
+            print(obj.path)
+        
+            img = Image.open(full_path)
 
-        # obj.cktimage  = tk.CTkImage(light_image=img,dark_image=img,size=(523,402))
-        obj.cktimage  = tk.CTkImage(light_image=Image.open(full_path),
-                                    dark_image=Image.open(full_path),
-                                    size=(450,375))
+            # obj.cktimage  = tk.CTkImage(light_image=img,dark_image=img,size=(523,402))
+            obj.cktimage  = tk.CTkImage(light_image=Image.open(full_path),
+                                        dark_image=Image.open(full_path),
+                                        size=(450,375))
 
-        # Load existing EXIF data
-        exif_dict = piexif.load(img.info["exif"])
+            # Verify if exif data exist as it will crash when trying to load none existing data
+            exif_dict = img.info.get("exif") 
 
-        # See _exif.py for ifd and tag
-        # DateTime = 306
-        obj.DateTimeOriginal = exif_dict["0th"][306].decode('UTF-8')
-        obj.DateTimeOriginal_formating()
+            if exif_dict:
+                # Load existing EXIF data
+                exif_dict = piexif.load(img.info["exif"])
 
-        try:
-            # GPSLatitudeRef = 1
-            # GPSLatitude = 2
-            # GPSLongitudeRef = 3
-            # GPSLongitude = 4
-            # GPSAltitudeRef = 5
-            # GPSAltitude = 6
-            for i in range(1,7):
-                obj.gps_info.append(exif_dict["GPS"][i])
-                # print(piexif.TAGS["GPS"][i]["name"], exif_dict["GPS"][i])
-        except:
-            print("This image has no GPS info in it")
+                # See _exif.py for ifd and tag
+                # DateTime = 306
+                try:
+                    obj.DateTimeOriginal = exif_dict["0th"][306].decode('UTF-8')
+                    obj.DateTimeOriginal_formating()
+                    try:
+                        # GPSLatitudeRef = 1
+                        # GPSLatitude = 2
+                        # GPSLongitudeRef = 3
+                        # GPSLongitude = 4
+                        # GPSAltitudeRef = 5
+                        # GPSAltitude = 6
+                        for i in range(1,7):
+                            obj.gps_info.append(exif_dict["GPS"][i])
+                            # print(piexif.TAGS["GPS"][i]["name"], exif_dict["GPS"][i])
+                    except:
+                        print("This image has no GPS info in it")
+                    print(obj.gps_info)
+                    print(obj.date)
+                    print(obj.time_of_day_second)
+                    print("---------------------------")
+                except:
+                    # Some if not time for match removed from list
+                    l_obj.remove(obj)
+                    print("NO EXIF DATA FOR MATCH")
+                    print("---------------------------")
 
-        print(obj.gps_info)
-        print(obj.date)
-        print(obj.time_of_day_second)
-        print("---------------------------")
-        img.close()
+
+            else :
+                # Data does not exist we ignore picture (No data => no time stamp nothing to match)
+                l_obj.remove(obj)
+                print("NO EXIF DATA")
+                print("---------------------------")
+
+            img.close()
 
 def split_obj_on_gps_info(l_obj):
     l_obj_w_gps = []
@@ -116,10 +136,10 @@ def find_closer_time(l_obj_w_gps,l_obj_no_gps,threshold=1*60*60):
 
                 if delta_time_temp <= threshold and delta_time_temp < delta_time:
                     delta_time = delta_time_temp
-                    temp_gps_info = obj_w_gps.gps_info
+                    obj_no_gps.gps_info = obj_w_gps.gps_info
                     obj_no_gps.has_match = True
+                    obj_no_gps.matched_obj = obj_w_gps
 
-        obj_no_gps.gps_info = temp_gps_info
 
         print(obj_no_gps.name)
         print(obj_no_gps.gps_info)
@@ -158,30 +178,6 @@ def save_results(vars):
         if obj.gps_info != []:
             write_geo_metadata(obj,vars.safe_mode)
     os.chdir(cwd)
-
-
-# Testing tool
-# img_folder = rb"C:\Users\Jules\Documents\GeoSetter\img"
-# output_folder = rb"C:\Users\Jules\Documents\GeoSetter\img2"
-
-# l_obj_image_metadata = []
-
-# print("Metadata extraction")
-# metadata_extraction(l_obj_image_metadata,img_folder)
-
-# print("Split list in two")
-# l_obj_w_gps,l_obj_no_gps = split_obj_on_gps_info(l_obj_image_metadata)
-
-# print("Finding close picture and taking gps data")
-# find_closer_time(l_obj_w_gps,l_obj_no_gps)
-# cwd = os.getcwd()
-# os.chdir(output_folder)
-# for obj in l_obj_no_gps:
-#     if obj.gps_info != []:
-#         write_geo_metadata(obj,output_folder)
-# os.chdir(cwd)
-
-
 
 #################################### GUI ####################################
 
@@ -223,7 +219,7 @@ class variable_for_ui:
 
     def get_run_info(self):
         self.find_number_image_w_match_found()
-        self.run_info = ("Number of Images="+str(len(self.l_obj_image_metadata))+
+        self.run_info = ("Nb Images="+str(len(self.l_obj_image_metadata))+
                 "; GPS="+str(len(self.l_obj_w_gps))+
                 "; No GPS="+str(len(self.l_obj_no_gps))+
                 "; Match Found=" +str(self.nb_match_found))
@@ -268,13 +264,22 @@ def main_run(run_vars,type):
 
 def img_display_change(run_vars,control):
     size_list = len(run_var.l_obj_no_gps)
+
     if size_list > 0:
         run_vars.idx_img_display = (run_vars.idx_img_display + control)%size_list
+        
         if run_vars.l_obj_no_gps[run_vars.idx_img_display].has_match :
             str_image_status.set("MATCHED")
+            obj_no_gps = run_vars.l_obj_no_gps[run_vars.idx_img_display]
+            obj_matched = obj_no_gps.matched_obj
+
+            image_no_gps.configure(image=obj_no_gps.cktimage)
+            image_matched_to.configure(image=obj_matched.cktimage)
         else:
             str_image_status.set("NOT MATCHED")
-        image_label.configure(image=run_vars.l_obj_no_gps[run_vars.idx_img_display].cktimage)
+            image_no_gps.configure(image=run_vars.l_obj_no_gps[run_vars.idx_img_display].cktimage)
+            image_matched_to.configure(image=run_vars.l_obj_no_gps[run_vars.idx_img_display].cktimage)
+
 
 ### UI Instance ###
 
@@ -282,9 +287,8 @@ tk.set_appearance_mode("System")  # Modes: system (default), light, dark
 tk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
 
 app = tk.CTk()  # create CTk window like you do with the Tk window
-app.geometry("470x700")
+app.geometry("470x1100")
 app.title("GeoSetter")
-
 
 str_input_dir = tk.StringVar()
 textbox_input_dir = tk.CTkEntry(app, textvariable=str_input_dir).place(x = 10, y = 50)
@@ -337,8 +341,11 @@ t_run_info.place(x = 100, y = 200)
 
 # size=(525,400)
 
-image_label = tk.CTkLabel(app, text="", text_color="white")  # display image with a CTkLabel
-image_label.place(x = 10, y = 275)
+image_no_gps = tk.CTkLabel(app, text="", text_color="white")  # display image with a CTkLabel
+image_no_gps.place(x = 10, y = 275)
+
+image_matched_to = tk.CTkLabel(app, text="", text_color="white")  # display image with a CTkLabel
+image_matched_to.place(x = 10, y = 700)
 
 btn_img_prev = tk.CTkButton(app, text="<", command=lambda: img_display_change(run_var,-1))
 btn_img_prev.place(x = 10, y = 225)
@@ -348,7 +355,7 @@ btn_img_next.place(x = 160, y = 225)
 
 str_image_status = tk.StringVar()
 t_image_status = tk.CTkLabel(app, textvariable=str_image_status)
-t_image_status.place(x = 235, y = 675)
+t_image_status.place(x = 235, y = 650)
 
 
 app.mainloop()
