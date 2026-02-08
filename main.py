@@ -6,6 +6,8 @@ import piexif
 import customtkinter as tk
 from customtkinter import filedialog as fd
 
+# Using some global variable at the end with the GUI; Could be better
+
 class image_metadata:
     '''
     A class to store metadata of an image, including its name, path, GPS information, original date and time, and time of day in seconds.
@@ -17,7 +19,8 @@ class image_metadata:
         self.path = path
 
         self.gps_info = []
-        # self.
+        self.has_match = False
+        self.cktimage = None
 
         self.DateTimeOriginal = ""
         self.date = ""
@@ -30,7 +33,6 @@ class image_metadata:
     def DateTimeOriginal_formating(self):
         self.date = self.DateTimeOriginal.split(" ")[0]
         self.time_of_day_to_second(self.DateTimeOriginal.split(" ")[1])
-
 
 
 
@@ -56,6 +58,11 @@ def metadata_extraction(l_obj,img_folder):
         print(obj.path)
 
         img = Image.open(full_path)
+
+        # obj.cktimage  = tk.CTkImage(light_image=img,dark_image=img,size=(523,402))
+        obj.cktimage  = tk.CTkImage(light_image=Image.open(full_path),
+                                    dark_image=Image.open(full_path),
+                                    size=(450,375))
 
         # Load existing EXIF data
         exif_dict = piexif.load(img.info["exif"])
@@ -110,14 +117,16 @@ def find_closer_time(l_obj_w_gps,l_obj_no_gps,threshold=1*60*60):
                 if delta_time_temp <= threshold and delta_time_temp < delta_time:
                     delta_time = delta_time_temp
                     temp_gps_info = obj_w_gps.gps_info
+                    obj_no_gps.has_match = True
 
         obj_no_gps.gps_info = temp_gps_info
+
         print(obj_no_gps.name)
         print(obj_no_gps.gps_info)
 
     return True
 
-def write_geo_metadata(obj):
+def write_geo_metadata(obj,safe_mode):
     # Write 
     # Open image to edit
     img = Image.open(obj.path)
@@ -132,10 +141,23 @@ def write_geo_metadata(obj):
     exif_bytes = piexif.dump(exif_dict)
 
     # Save image with new metadata
-    img.save("gps_"+obj.name, exif=exif_bytes)
+    if safe_mode:
+        img.save("gps_"+obj.name, exif=exif_bytes)
+    else:
+        img.save(obj.name, exif=exif_bytes)
     img.close()
 
     return True
+
+def save_results(vars):
+    # Saving the image with metadata added
+
+    cwd = os.getcwd()
+    os.chdir(vars.output_folder)
+    for obj in vars.l_obj_no_gps:
+        if obj.gps_info != []:
+            write_geo_metadata(obj,vars.safe_mode)
+    os.chdir(cwd)
 
 
 # Testing tool
@@ -163,7 +185,7 @@ def write_geo_metadata(obj):
 
 #################################### GUI ####################################
 
-# UI FUNCTION
+#### UI FUNCTION ###
 
 # Selection of directory
 def select_dir(text_entry):
@@ -176,81 +198,129 @@ def tick_checkbtn(btn):
         if l2[i] != btn:
             if l2[i].get():
                 l2[i].deselect()
-    
-def main_run():
-    str_stat.set("Processing")
-    img_folder = str_input_dir.get()
-    output_folder = str_output_dir.get()
 
-    l_obj_image_metadata = []
+class variable_for_ui:
+    # Use to keep some of the variable together, reducing the use of global one.
+    # For now I will not add the tinker variable to this class, too many of them
+    def __init__(self):
+        self.l_obj_image_metadata = []
+        self.l_obj_w_gps = []
+        self.l_obj_no_gps = []
+
+        self.input_folder = None
+        self.output_folder = None
+
+        self.idx_img_display = 0
+        self.run_info = ""
+        self.nb_match_found = 0
+        self.safe_mode = False
+
+    def find_number_image_w_match_found(self):
+        self.nb_match_found = 0
+        for i in range(len(self.l_obj_no_gps)):
+            if (self.l_obj_no_gps[i].has_match):
+                self.nb_match_found += 1
+
+    def get_run_info(self):
+        self.find_number_image_w_match_found()
+        self.run_info = ("Number of Images="+str(len(self.l_obj_image_metadata))+
+                "; GPS="+str(len(self.l_obj_w_gps))+
+                "; No GPS="+str(len(self.l_obj_no_gps))+
+                "; Match Found=" +str(self.nb_match_found))
+
+
+run_var = variable_for_ui()
+
+def main_run(run_vars,type):
+    str_stat.set("Processing")
+    run_vars.input_folder = str_input_dir.get()
+    run_vars.output_folder = str_output_dir.get()
+
+    run_var.safe_mode = btn_safe_mode.get()
+
+    if run_vars.input_folder == "":
+        return False
+
+    if run_vars.output_folder == "":
+        run_vars.output_folder = os.getcwd()
+
+
+    run_vars.l_obj_image_metadata = []
     print("Metadata extraction")
-    metadata_extraction(l_obj_image_metadata,img_folder)
+    metadata_extraction(run_vars.l_obj_image_metadata,run_vars.input_folder)
 
     print("Split list in two")
-    l_obj_w_gps,l_obj_no_gps = split_obj_on_gps_info(l_obj_image_metadata)
+    run_vars.l_obj_w_gps,run_vars.l_obj_no_gps = split_obj_on_gps_info(run_vars.l_obj_image_metadata)
 
     print("Finding close picture and taking gps data")
-    find_closer_time(l_obj_w_gps,l_obj_no_gps)
-
+    find_closer_time(run_vars.l_obj_w_gps,run_vars.l_obj_no_gps,60*60)
     
-    cwd = os.getcwd()
-    os.chdir(output_folder)
-    nb_img_changed = 0
-    for obj in l_obj_no_gps:
-        if obj.gps_info != []:
-            write_geo_metadata(obj)
-            nb_img_changed+=1
+    run_vars.get_run_info()
+    str_run_info.set(run_vars.run_info)
 
-    os.chdir(cwd)
+    if type == "run":
+        save_results(run_vars)
+        str_stat.set("Run Done")
 
-    str_run_info.set("TI="+str(len(l_obj_image_metadata))+";IG="+str(len(l_obj_w_gps))+";ING="+str(len(l_obj_no_gps))+";ICG=" +str(nb_img_changed))
-    str_stat.set("DONE")
-    image_label.configure(image=my_image2)
-    image_label.configure(text="It worked!! Free doggo to celebrate")
-    text=""
+    else:
+        str_stat.set("Scan Done")
 
 
+def img_display_change(run_vars,control):
+    size_list = len(run_var.l_obj_no_gps)
+    if size_list > 0:
+        run_vars.idx_img_display = (run_vars.idx_img_display + control)%size_list
+        if run_vars.l_obj_no_gps[run_vars.idx_img_display].has_match :
+            str_image_status.set("MATCHED")
+        else:
+            str_image_status.set("NOT MATCHED")
+        image_label.configure(image=run_vars.l_obj_no_gps[run_vars.idx_img_display].cktimage)
 
-
+### UI Instance ###
 
 tk.set_appearance_mode("System")  # Modes: system (default), light, dark
 tk.set_default_color_theme("blue")  # Themes: blue (default), dark-blue, green
 
 app = tk.CTk()  # create CTk window like you do with the Tk window
-app.geometry("600x700")
+app.geometry("470x700")
 app.title("GeoSetter")
 
 
 str_input_dir = tk.StringVar()
 textbox_input_dir = tk.CTkEntry(app, textvariable=str_input_dir).place(x = 10, y = 50)
-button = tk.CTkButton(app, text="Input dir", command=lambda: select_dir(str_input_dir))
-button.place(x = 150, y = 50)
+button = tk.CTkButton(app, text="Input directory", command=lambda: select_dir(str_input_dir))
+button.place(x = 160, y = 50)
 
 str_output_dir = tk.StringVar()
 textbox_output_dir = tk.CTkEntry(app, textvariable=str_output_dir).place(x = 10, y = 100)
-button2 = tk.CTkButton(app, text="output dir", command=lambda: select_dir(str_output_dir))
-button2.pack(padx = 25, pady = 25)
-button2.place(x = 150, y = 100)
+button2 = tk.CTkButton(app, text="Output directory", command=lambda: select_dir(str_output_dir))
+button2.place(x = 160, y = 100)
+
+# space with gap 150
 
 # RUN OPTIONS
 
 # Safe mode ie no overwriting original pictures
-btn_safe_mdoe = tk.CTkCheckBox(app, text="Safe mode")
-btn_safe_mdoe.place(x = 400, y = 50)
-btn_safe_mdoe.select()
+btn_safe_mode = tk.CTkCheckBox(app, text="Safe mode")
+btn_safe_mode.place(x = 310, y = 50)
+btn_safe_mode.select()
+run_var.safe_mode = btn_safe_mode.get()
 
 # Button to select search range
-btn_1h = tk.CTkCheckBox(app, text="1h", command=lambda: tick_checkbtn(btn_1h))
-btn_1h.place(x = 400, y = 75)
+btn_1h = tk.CTkCheckBox(app, text="1H", command=lambda: tick_checkbtn(btn_1h))
+btn_1h.place(x = 310, y = 75)
 
-btn_2h = tk.CTkCheckBox(app, text="2h", command=lambda: tick_checkbtn(btn_2h))
-btn_2h.place(x = 400, y = 100)
+btn_2h = tk.CTkCheckBox(app, text="2H", command=lambda: tick_checkbtn(btn_2h))
+btn_2h.place(x = 310, y = 100)
 
-btn_3h = tk.CTkCheckBox(app, text="3h", command=lambda: tick_checkbtn(btn_3h))
-btn_3h.place(x = 400, y = 125)
+btn_3h = tk.CTkCheckBox(app, text="3H", command=lambda: tick_checkbtn(btn_3h))
+btn_3h.place(x = 310, y = 125)
 
-btn_run = tk.CTkButton(app, text="RUN", command=lambda: main_run())
-btn_run.place(x = 400, y = 150)
+btn_scan = tk.CTkButton(app, text="SCAN", command=lambda: main_run(run_var,"scan"))
+btn_scan.place(x = 10, y = 150)
+
+btn_run = tk.CTkButton(app, text="RUN", command=lambda: main_run(run_var,"run"))
+btn_run.place(x = 160, y = 150)
 
 l2 = [btn_1h,btn_2h,btn_3h]
 
@@ -259,30 +329,27 @@ l2 = [btn_1h,btn_2h,btn_3h]
 str_stat = tk.StringVar()
 str_stat.set("")
 t_status = tk.CTkLabel(app, textvariable=str_stat)
-t_status.place(x = 400, y = 175)
+t_status.place(x = 25, y = 200)
 
 str_run_info = tk.StringVar()
 t_run_info = tk.CTkLabel(app, textvariable=str_run_info)
-t_run_info.place(x = 400, y = 200)
+t_run_info.place(x = 100, y = 200)
 
+# size=(525,400)
 
-t1_file3 = tk.StringVar()
-t1_textbox3 = tk.CTkEntry(app, textvariable=t1_file3).place(x = 10, y = 150)
-
-
-
-my_image = tk.CTkImage(light_image=Image.open('20251215_150905.JPG'),
-                        dark_image=Image.open("20251215_150905.JPG"),
-                        size=(523,402))
-
-my_image2 = tk.CTkImage(light_image=Image.open('20251229_155554.JPG'),
-                        dark_image=Image.open("20251229_155554.JPG"),
-                        size=(523,402))
-
-
-# image_label = tk.CTkLabel(app, image=my_image, text="")  # display image with a CTkLabel
 image_label = tk.CTkLabel(app, text="", text_color="white")  # display image with a CTkLabel
-image_label.place(x = 50, y = 225)
+image_label.place(x = 10, y = 275)
+
+btn_img_prev = tk.CTkButton(app, text="<", command=lambda: img_display_change(run_var,-1))
+btn_img_prev.place(x = 10, y = 225)
+
+btn_img_next = tk.CTkButton(app, text=">", command=lambda: img_display_change(run_var,1))
+btn_img_next.place(x = 160, y = 225)
+
+str_image_status = tk.StringVar()
+t_image_status = tk.CTkLabel(app, textvariable=str_image_status)
+t_image_status.place(x = 235, y = 675)
+
 
 app.mainloop()
 
