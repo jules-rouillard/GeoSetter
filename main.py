@@ -1,6 +1,7 @@
 import os
 import sys
-from PIL import Image, ExifTags
+import PIL
+from PIL import Image, ExifTags, ImageOps
 import piexif
 # For GUI
 import customtkinter as tk
@@ -62,10 +63,11 @@ def metadata_extraction(l_obj,img_folder):
             print(obj.path)
         
             img = Image.open(full_path)
+            img = ImageOps.exif_transpose(img)
 
             # obj.cktimage  = tk.CTkImage(light_image=img,dark_image=img,size=(523,402))
-            obj.cktimage  = tk.CTkImage(light_image=Image.open(full_path),
-                                        dark_image=Image.open(full_path),
+            obj.cktimage  = tk.CTkImage(light_image=img,
+                                        dark_image=img,
                                         size=(450,375))
 
             # Verify if exif data exist as it will crash when trying to load none existing data
@@ -99,6 +101,7 @@ def metadata_extraction(l_obj,img_folder):
                 except:
                     # Some if not time for match removed from list
                     l_obj.remove(obj)
+                    img.close()
                     print("NO EXIF DATA FOR MATCH")
                     print("---------------------------")
 
@@ -106,10 +109,11 @@ def metadata_extraction(l_obj,img_folder):
             else :
                 # Data does not exist we ignore picture (No data => no time stamp nothing to match)
                 l_obj.remove(obj)
+                img.close()
                 print("NO EXIF DATA")
                 print("---------------------------")
 
-            img.close()
+            # img.close()  # Removed to prevent closing images used in CTkImage
 
 def split_obj_on_gps_info(l_obj):
     l_obj_w_gps = []
